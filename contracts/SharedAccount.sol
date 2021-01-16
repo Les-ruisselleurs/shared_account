@@ -7,11 +7,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 contract SharedAccount is Ownable, AccessControl {
+    bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
+
     string private _name;
     bool private _private;
 
     ERC20 daiInstance;
-    bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
 
     constructor(
         address daiAddress,
@@ -28,8 +29,14 @@ contract SharedAccount is Ownable, AccessControl {
         return _name;
     }
 
+    function deposit(uint256 amount) public returns (bool) {
+        daiInstance.approve(msg.sender, amount);
+        daiInstance.transferFrom(msg.sender, address(this), amount);
+        return true;
+    }
+
     function balance() public view returns (uint256) {
-        if (_private == true) {
+        if (_private) {
             require(owner() == _msgSender(), "Only owner can see the balance");
             return 0;
         }
