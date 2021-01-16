@@ -20,7 +20,7 @@ contract SharedAccount is Ownable, AccessControl {
         bool isPrivate
     ) {
         daiInstance = ERC20(daiAddress);
-        _setupRole(CREATOR_ROLE, msg.sender);
+        _setupRole(CREATOR_ROLE, _msgSender());
         _name = accountName;
         _private = isPrivate;
     }
@@ -30,8 +30,7 @@ contract SharedAccount is Ownable, AccessControl {
     }
 
     function deposit(uint256 amount) public returns (bool) {
-        daiInstance.approve(msg.sender, amount);
-        daiInstance.transferFrom(msg.sender, address(this), amount);
+        daiInstance.transferFrom(_msgSender(), address(this), amount);
         return true;
     }
 
