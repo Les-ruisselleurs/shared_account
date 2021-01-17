@@ -2,17 +2,24 @@
 pragma solidity >=0.7.0;
 
 import "@openzeppelin/contracts/GSN/Context.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 
 import "./SharedAccount.sol";
 
 contract SharedAccountManager is Context {
-    mapping(address => address[]) private sharedAccounts;
+    using EnumerableSet for EnumerableSet.AddressSet;
+
+    mapping(address => EnumerableSet.AddressSet) private userToSharedAccounts;
+    mapping(address => EnumerableSet.AddressSet) private sharedAccountsToUser;
+
+    address feeAddress;
 
     //  This event is emitted when a new SharedAccount is created
     event SharedAccountCreated(address sharedAccountAddress);
 
-    constructor() {}
+    constructor(address feeTo) {
+        feeAddress = feeTo;
+    }
 
     function create(
         string memory name,
@@ -21,13 +28,51 @@ contract SharedAccountManager is Context {
         address erc20Address
     ) public returns (bool) {
         SharedAccount sharedAccount =
-            new SharedAccount(name, description, erc20Name, erc20Address);
-        sharedAccounts[_msgSender()].push(address(sharedAccount));
+            new SharedAccount(
+                name,
+                description,
+                erc20Name,
+                erc20Address,
+                feeAddress
+            );
+        userToSharedAccounts[_msgSender()].add(address(sharedAccount));
+        sharedAccountsToUser[address(sharedAccount)].add(_msgSender());
         emit SharedAccountCreated(address(sharedAccount));
         return true;
     }
 
     function mySharedAccounts() public view returns (address[] memory) {
-        return sharedAccounts[_msgSender()];
+        address[] memory sharedAccounts =
+            new address[](
+                EnumerableSet.length(userToSharedAccounts[_msgSender()])
+            );
+        for (uint256 i = 0; i < sharedAccounts.length; i++) {
+            sharedAccounts[i] = address(
+                EnumerableSet.at(userToSharedAccounts[_msgSender()], i)
+            );
+        }
+        return sharedAccounts;
+    }
+
+    function grandAdminRole(address sharedAccount, address newAdmin)
+        public
+        returns (bool)
+    {
+        ISharedAccount account = ISharedAccount(sharedAccount);
+        account.grantAdminRole(newAdmin);
+        userToSharedAccounts[newAdmin].add(address(sharedAccount));
+        sharedAccountsToUser[address(sharedAccount)].add(newAdmin);
+        return true;
+    }
+
+    function revokeAdminRole(address sharedAccount, address oldAdmin)
+        public
+        returns (bool)
+    {
+        ISharedAccount account = ISharedAccount(sharedAccount);
+        account.removeAdminRole(oldAdmin);
+        userToSharedAccounts[oldAdmin].remove(sharedAccount);
+        sharedAccountsToUser[sharedAccount].remove(oldAdmin);
+        return true;
     }
 }

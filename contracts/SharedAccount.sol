@@ -6,11 +6,18 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
+interface ISharedAccount {
+    function grantAdminRole(address newAdmin) external returns (bool);
+
+    function removeAdminRole(address newAdmin) external returns (bool);
+}
+
 contract SharedAccount is Ownable, AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     string name;
     string description;
+    address redirectFeeTo;
 
     mapping(string => address) supportedERC20;
 
@@ -35,13 +42,15 @@ contract SharedAccount is Ownable, AccessControl {
         string memory accountName,
         string memory accountDescription,
         string memory erc20Name,
-        address erc20Address
+        address erc20Address,
+        address feeTo
     ) {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(ADMIN_ROLE, _msgSender());
         name = accountName;
         description = accountDescription;
         supportedERC20[erc20Name] = erc20Address;
+        redirectFeeTo = feeTo;
     }
 
     function grantAdminRole(address newAdmin) public returns (bool) {
@@ -89,9 +98,14 @@ contract SharedAccount is Ownable, AccessControl {
         uint256 amount
     ) public supportErc20(erc20Name) onlyAdmin returns (bool) {
         IERC20 erc20 = ERC20(supportedERC20[erc20Name]);
-        erc20.approve(address(this), amount);
-        erc20.transferFrom(address(this), to, amount);
-        emit Withdraw(to, amount);
+
+        uint256 fee = SafeMath.div(SafeMath.mul(amount, 4), 1000);
+        uint256 total = amount - fee;
+        erc20.approve(address(this), total);
+        erc20.transferFrom(address(this), to, total);
+        erc20.approve(address(this), fee);
+        erc20.transferFrom(address(this), redirectFeeTo, fee);
+        emit Withdraw(to, total);
         return true;
     }
 }
