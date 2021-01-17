@@ -7,49 +7,91 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 contract SharedAccount is Ownable, AccessControl {
-    bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
-    string private _name;
-    bool private _private;
+    string name;
+    string description;
 
-    ERC20 daiInstance;
+    mapping(string => address) supportedERC20;
+
+    event ReceiveDeposit(address sender, uint256 amount);
+
+    event Withdraw(address to, uint256 amount);
+
+    modifier supportErc20(string memory erc20) {
+        require(
+            supportedERC20[erc20] != address(0),
+            "This shared account doesn't support this erc20"
+        );
+        _;
+    }
+
+    modifier onlyAdmin() {
+        require(hasRole(ADMIN_ROLE, _msgSender()), "Caller is not an Admin");
+        _;
+    }
 
     constructor(
-        address daiAddress,
         string memory accountName,
-        bool isPrivate
+        string memory accountDescription,
+        string memory erc20Name,
+        address erc20Address
     ) {
-        daiInstance = ERC20(daiAddress);
-        _setupRole(CREATOR_ROLE, _msgSender());
-        _name = accountName;
-        _private = isPrivate;
+        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _setupRole(ADMIN_ROLE, _msgSender());
+        name = accountName;
+        description = accountDescription;
+        supportedERC20[erc20Name] = erc20Address;
     }
 
-    function name() public view returns (string memory) {
-        return _name;
-    }
-
-    function deposit(uint256 amount) public returns (bool) {
-        daiInstance.transferFrom(_msgSender(), address(this), amount);
+    function grantAdminRole(address newAdmin) public returns (bool) {
+        grantRole(ADMIN_ROLE, newAdmin);
         return true;
     }
 
-    function balance() public view returns (uint256) {
-        if (_private) {
-            require(owner() == _msgSender(), "Only owner can see the balance");
-            return 0;
-        }
-        uint256 daiBalance = daiInstance.balanceOf(address(this));
-        return daiBalance;
+    function removeAdminRole(address newAdmin) public returns (bool) {
+        revokeRole(ADMIN_ROLE, newAdmin);
+        return true;
     }
 
-    function withdraw(address to, uint256 amount)
+    function addErc20(string memory erc20Name, address erc20Address)
         public
-        onlyOwner
+        onlyAdmin
         returns (bool)
     {
-        daiInstance.approve(address(this), amount);
-        daiInstance.transferFrom(address(this), to, amount);
+        supportedERC20[erc20Name] = erc20Address;
+        return true;
+    }
+
+    function removeErc20(string memory erc20Name)
+        public
+        onlyAdmin
+        returns (bool)
+    {
+        supportedERC20[erc20Name] = address(0);
+        return true;
+    }
+
+    function deposit(string memory erc20Name, uint256 amount)
+        public
+        supportErc20(erc20Name)
+        returns (bool)
+    {
+        IERC20 erc20 = ERC20(supportedERC20[erc20Name]);
+        erc20.transferFrom(_msgSender(), address(this), amount);
+        emit ReceiveDeposit(_msgSender(), amount);
+        return true;
+    }
+
+    function withdraw(
+        string memory erc20Name,
+        address to,
+        uint256 amount
+    ) public supportErc20(erc20Name) onlyAdmin returns (bool) {
+        IERC20 erc20 = ERC20(supportedERC20[erc20Name]);
+        erc20.approve(address(this), amount);
+        erc20.transferFrom(address(this), to, amount);
+        emit Withdraw(to, amount);
         return true;
     }
 }
