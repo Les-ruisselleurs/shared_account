@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -86,7 +86,7 @@ contract SharedAccount is Ownable, AccessControl {
         supportErc20(erc20Name)
         returns (bool)
     {
-        IERC20 erc20 = ERC20(supportedERC20[erc20Name]);
+        IERC20 erc20 = IERC20(supportedERC20[erc20Name]);
         erc20.transferFrom(_msgSender(), address(this), amount);
         emit ReceiveDeposit(_msgSender(), amount);
         return true;
@@ -97,7 +97,7 @@ contract SharedAccount is Ownable, AccessControl {
         address to,
         uint256 amount
     ) public supportErc20(erc20Name) onlyAdmin returns (bool) {
-        IERC20 erc20 = ERC20(supportedERC20[erc20Name]);
+        IERC20 erc20 = IERC20(supportedERC20[erc20Name]);
 
         uint256 fee = SafeMath.div(SafeMath.mul(amount, 4), 1000);
         uint256 total = amount - fee;
